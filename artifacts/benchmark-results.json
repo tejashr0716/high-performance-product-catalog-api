@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-10-25T12:00:37.969721+00:00",
+  "hardware": {
+    "platform": "darwin",
+    "python_version": "3.14.6"
+  },
+  "config": {
+    "iterations_per_scenario": 200,
+    "concurrency_level": 10,
+    "database": "MySQL 8.4 (InnoDB composite indexing, port 3307)",
+    "cache": "Redis 7.4 (in-memory key-value store, port 6379)"
+  },
+  "scenarios": {
+    "uncached_mysql_primary": {
+      "count": 200,
+      "min_ms": 9.182,
+      "mean_ms": 11.744,
+      "median_p50_ms": 11.511,
+      "p90_ms": 13.29,
+      "p95_ms": 14.281,
+      "p99_ms": 17.185,
+      "max_ms": 22.756,
+      "std_dev_ms": 1.5,
+      "rps": 787.98,
+      "total_duration_sec": 0.254,
+      "status_codes": {
+        "200": 200
+      },
+      "cache_distribution": {
+        "BYPASS": 200
+      }
+    },
+    "warm_redis_cache": {
+      "count": 200,
+      "min_ms": 3.671,
+      "mean_ms": 6.319,
+      "median_p50_ms": 6.093,
+      "p90_ms": 6.669,
+      "p95_ms": 7.521,
+      "p99_ms": 12.562,
+      "max_ms": 13.042,
+      "std_dev_ms": 1.336,
+      "rps": 1431.17,
+      "total_duration_sec": 0.14,
+      "status_codes": {
+        "200": 200
+      },
+      "cache_distribution": {
+        "HIT": 200
+      }
+    },
+    "cold_stampede_concurrency": {
+      "count": 50,
+      "min_ms": 0.846,
+      "mean_ms": 11.24,
+      "median_p50_ms": 0.899,
+      "p90_ms": 57.536,
+      "p95_ms": 57.878,
+      "p99_ms": 57.976,
+      "max_ms": 58.209,
+      "std_dev_ms": 22.028,
+      "rps": 847.57,
+      "total_duration_sec": 0.059,
+      "status_codes": {
+        "200": 50
+      },
+      "cache_distribution": {
+        "MISS": 1,
+        "HIT": 40,
+        "STAMPEDE_PROTECTED_HIT": 9
+      }
+    }
+  },
+  "comparative_analysis": {
+    "uncached_mysql_p50_ms": 11.511,
+    "warm_redis_p50_ms": 6.093,
+    "latency_reduction_percent": 47.07,
+    "throughput_gain_factor": 1.82
+  }
+}

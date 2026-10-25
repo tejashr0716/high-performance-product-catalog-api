@@ -1,0 +1,59 @@
+{
+  "project": "high-performance-product-catalog-api",
+  "timestamp": "2026-10-25T17:30:00Z",
+  "summary": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "pass_rate_percent": 100.0,
+    "duration_seconds": 0.37
+  },
+  "test_suites": [
+    {
+      "name": "test_cache_behavior.py",
+      "tests": [
+        {"name": "test_cold_and_warm_cache_transitions", "status": "PASSED"},
+        {"name": "test_cache_invalidation_on_product_update", "status": "PASSED"},
+        {"name": "test_cache_invalidation_on_product_deletion", "status": "PASSED"},
+        {"name": "test_zero_cache_key_collision_across_distinct_filters", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "test_crud.py",
+      "tests": [
+        {"name": "test_read_product_by_id", "status": "PASSED"},
+        {"name": "test_read_nonexistent_product_returns_404", "status": "PASSED"},
+        {"name": "test_unauthorized_product_creation_rejected", "status": "PASSED"},
+        {"name": "test_authorized_product_crud_lifecycle", "status": "PASSED"},
+        {"name": "test_duplicate_sku_rejection", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "test_resilience.py",
+      "tests": [
+        {"name": "test_redis_failure_graceful_fallback", "status": "PASSED"},
+        {"name": "test_health_check_reflects_redis_degradation", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "test_search_filters.py",
+      "tests": [
+        {"name": "test_recursive_category_hierarchy_filtering", "status": "PASSED"},
+        {"name": "test_brand_filtering", "status": "PASSED"},
+        {"name": "test_price_range_filtering", "status": "PASSED"},
+        {"name": "test_in_stock_filtering", "status": "PASSED"},
+        {"name": "test_keyword_search_across_title_and_description", "status": "PASSED"},
+        {"name": "test_sorting_orders", "status": "PASSED"},
+        {"name": "test_stable_pagination_slices", "status": "PASSED"},
+        {"name": "test_sql_parameterization_injection_safety", "status": "PASSED"}
+      ]
+    },
+    {
+      "name": "test_stampede_protection.py",
+      "tests": [
+        {"name": "test_cache_stampede_protection_on_cold_key", "status": "PASSED"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Performance Product Catalog Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="brand">
+                <span class="logo-icon">⚡</span>
+                <div class="logo-text">
+                    <h1>CatalogEngine</h1>
+                    <span class="sub-badge">FastAPI · MySQL · Redis Cache</span>
+                </div>
+            </div>
+            <div class="nav-metrics">
+                <div class="metric-pill" id="cache-pill">Cache: <span id="cache-stat">—</span></div>
+                <div class="metric-pill" id="latency-pill">Latency: <span id="latency-stat">— ms</span></div>
+                <button class="btn btn-outline" id="btn-admin-toggle">🔑 Admin Mode</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Sidebar Filters -->
+        <aside class="sidebar">
+            <div class="filter-header">
+                <h3>Filters & Search</h3>
+                <button class="btn-link" id="btn-reset-filters">Reset</button>
+            </div>
+
+            <div class="filter-group">
+                <label for="search-input">Search Keywords</label>
+                <input type="text" id="search-input" placeholder="e.g. Wireless, Pro, Sony...">
+            </div>
+
+            <div class="filter-group">
+                <label for="category-select">Category (Hierarchical)</label>
+                <select id="category-select">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="brand-select">Brand</label>
+                <select id="brand-select">
+                    <option value="">All Brands</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Price Range (₹)</label>
+                <div class="price-inputs">
+                    <input type="number" id="min-price" placeholder="Min" min="0">
+                    <span>—</span>
+                    <input type="number" id="max-price" placeholder="Max" min="0">
+                </div>
+            </div>
+
+            <div class="filter-group checkbox-group">
+                <label class="switch">
+                    <input type="checkbox" id="instock-check">
+                    <span class="slider round"></span>
+                </label>
+                <span>In Stock Only</span>
+            </div>
+
+            <div class="filter-group">
+                <label for="sort-select">Sort By</label>
+                <select id="sort-select">
+                    <option value="id_desc">Newest First</option>
+                    <option value="price_asc">Price: Low to High</option>
+                    <option value="price_desc">Price: High to Low</option>
+                    <option value="rating_desc">Highest Rated</option>
+                    <option value="title_asc">Title: A to Z</option>
+                </select>
+            </div>
+        </aside>
+
+        <!-- Product Grid Area -->
+        <section class="catalog-content">
+            <div class="catalog-toolbar">
+                <div class="result-count">
+                    Showing <span id="count-start">0</span>–<span id="count-end">0</span> of <span id="count-total">0</span> products
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-primary" id="btn-create-modal" style="display: none;">+ Add Product</button>
+                </div>
+            </div>
+
+            <div class="product-grid" id="product-grid">
+                <!-- Product cards injected by app.js -->
+            </div>
+
+            <div class="pagination-bar" id="pagination-bar">
+                <button class="btn btn-secondary" id="btn-prev-page" disabled>← Previous</button>
+                <span class="page-indicator">Page <span id="cur-page">1</span> of <span id="max-page">1</span></span>
+                <button class="btn btn-secondary" id="btn-next-page">Next →</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Admin Key Modal -->
+    <div class="modal" id="admin-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Unlock Admin Operations</h2>
+                <button class="modal-close" id="admin-modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Enter the <code>ADMIN_API_KEY</code> configured in your environment to enable protected write operations (Create, Edit, Soft-Archive):</p>
+                <input type="password" id="admin-key-input" placeholder="Enter Admin API Key...">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-admin">Cancel</button>
+                <button class="btn btn-primary" id="btn-save-admin-key">Unlock</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Create/Edit Modal -->
+    <div class="modal" id="product-modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h2 id="product-modal-title">Create Product</h2>
+                <button class="modal-close" id="product-modal-close">&times;</button>
+            </div>
+            <form id="product-form">
+                <div class="modal-body form-grid">
+                    <div class="form-field">
+                        <label>SKU *</label>
+                        <input type="text" id="form-sku" required placeholder="SKU-ELE-01-00099">
+                    </div>
+                    <div class="form-field">
+                        <label>Title *</label>
+                        <input type="text" id="form-title" required placeholder="Ultra Wireless Headphones">
+                    </div>
+                    <div class="form-field">
+                        <label>Slug *</label>
+                        <input type="text" id="form-slug" required placeholder="ultra-wireless-headphones-01">
+                    </div>
+                    <div class="form-field">
+                        <label>Price (₹) *</label>
+                        <input type="number" step="0.01" id="form-price" required placeholder="4999.00">
+                    </div>
+                    <div class="form-field">
+                        <label>Stock Quantity *</label>
+                        <input type="number" id="form-stock" required value="50">
+                    </div>
+                    <div class="form-field">
+                        <label>Rating (0-5)</label>
+                        <input type="number" step="0.1" id="form-rating" value="4.5" min="0" max="5">
+                    </div>
+                    <div class="form-field">
+                        <label>Category *</label>
+                        <select id="form-category" required></select>
+                    </div>
+                    <div class="form-field">
+                        <label>Brand *</label>
+                        <select id="form-brand" required></select>
+                    </div>
+                    <div class="form-field full-width">
+                        <label>Description</label>
+                        <textarea id="form-desc" rows="3" placeholder="Enter product description..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-product">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btn-save-product">Save Product</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
