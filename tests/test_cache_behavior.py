@@ -100,6 +100,25 @@ async def test_cache_invalidation_on_product_deletion(client: AsyncClient, admin
     assert after_del.status_code == 404
 
 
+def test_make_list_cache_key_full_sha256_entropy():
+    """
+    Verifies that canonical list keys use full 64-character SHA-256 digests
+    and generate distinct keys for different filters or pagination bounds.
+    """
+    params_a = {"min_price": 1000, "max_price": 5000, "page": 1, "page_size": 10}
+    params_b = {"min_price": 5000, "max_price": 10000, "page": 1, "page_size": 10}
+    params_c = {"min_price": 1000, "max_price": 5000, "page": 2, "page_size": 10}
+
+    key_a = make_list_cache_key(params_a)
+    key_b = make_list_cache_key(params_b)
+    key_c = make_list_cache_key(params_c)
+
+    assert len({key_a, key_b, key_c}) == 3
+    # Verify full SHA-256 (64 hex characters) is used
+    hash_part = key_a.replace("catalog:list:", "")
+    assert len(hash_part) == 64
+
+
 @pytest.mark.asyncio
 async def test_zero_cache_key_collision_across_distinct_filters(client: AsyncClient):
     # Filter A: min_price=1000, max_price=5000, page=1

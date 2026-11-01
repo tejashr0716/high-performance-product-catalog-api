@@ -1,8 +1,10 @@
-# High-Performance Product Catalog API
+# High-Performance Product Catalog API (Redis Caching Exploration)
 
-A production-grade, low-latency e-commerce catalog API engineered with **FastAPI**, **aiomysql (MySQL 8.4)**, and **Redis 7.4**, implementing multi-tier caching, recursive category filtering, single-flight mutex stampede protection, and automated cache invalidation.
+An open-source reference implementation exploring low-latency e-commerce catalog caching patterns engineered with **FastAPI**, **aiomysql (MySQL 8.4)**, and **Redis 7.4**, implementing multi-tier caching, recursive category filtering, single-flight mutex stampede protection with safe lock ownership, and pattern-based cache invalidation.
 
-[![Tests](https://img.shields.io/badge/tests-20%20passed%20%2F%20100%25-brightgreen)](artifacts/test-results.xml)
+> **Note on Scope & Status:** This repository is a standalone portfolio project demonstrating asynchronous Python backend patterns, Redis caching, and database indexing. It is maintained independently from frontend catalog applications (such as FlashMarket) and represents local exploratory benchmarks rather than production deployment metrics.
+
+[![Tests](https://img.shields.io/badge/tests-21%20passed%20%2F%20100%25-brightgreen)](artifacts/test-results.xml)
 [![Benchmark](https://img.shields.io/badge/p50%20latency-6.09ms%20(-47.07%25)-blue)](artifacts/benchmark-results.json)
 [![Throughput](https://img.shields.io/badge/throughput-1%2C431.17%20RPS%20(1.82x)-orange)](artifacts/benchmark-results.json)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -13,16 +15,16 @@ A production-grade, low-latency e-commerce catalog API engineered with **FastAPI
 
 1. **Recursive Hierarchical Categories (ANSI SQL CTE):**
    - Resolves multi-level nested parent-child categories (e.g. `Electronics` -> `Audio` -> `Wireless Headphones`) in a single query via `WITH RECURSIVE cat_tree AS (...)`, avoiding the N+1 query antipattern.
-2. **Deterministic Canonical Cache Keying:**
-   - Filters, pagination bounds, and sorting orders are normalized into SHA-256 hashed canonical Redis keys (`catalog:list:{sha256[:16]}`), guaranteeing zero collisions across distinct queries while maximizing cache hits.
-3. **Single-Flight Cache Stampede Protection (Mutex Locking):**
-   - Eliminates thundering herds on cold misses via distributed mutex locks (`SET lock:{key} 1 NX EX 5`). Only one elected worker queries MySQL while concurrent requests poll and consume the populated cache (`STAMPEDE_PROTECTED_HIT`).
-4. **Automated Mutation Invalidation:**
-   - Write operations (`POST`, `PATCH`, `DELETE`) immediately purge the single-product key (`catalog:product:{id}`) and all listing caches (`catalog:list:*`) using non-blocking Redis `SCAN` pipelines to ensure zero stale data without blocking the event loop.
+2. **Deterministic Canonical Cache Keying (Collision-Resistant):**
+   - Filters, pagination bounds, and sorting orders are normalized into full 64-character SHA-256 hashed canonical Redis keys (`catalog:list:{sha256}`), preventing collisions across different query parameters while maximizing cache hits.
+3. **Single-Flight Cache Stampede Protection (Safe Mutex Locking):**
+   - Mitigates thundering herds on cold misses via distributed mutex locks (`SET lock:{key} {uuid} NX EX ttl`). Only one elected worker queries MySQL while concurrent requests poll and consume the populated cache (`STAMPEDE_PROTECTED_HIT`). Locks are released atomically via Lua script verifying ownership token equality to prevent releasing a re-acquired lock after timeout.
+4. **Mutation-Triggered Cache Invalidation:**
+   - Write operations (`POST`, `PATCH`, `DELETE`) purge the single-product key (`catalog:product:{id}`) and paginated listing caches (`catalog:list:*`) using non-blocking Redis `SCAN` pipelines. Bounded consistency is maintained via TTL expiration (300s).
 5. **Optimistic Concurrency & Soft-Archival:**
    - Products feature monotonic version counters (`version = version + 1`) and non-destructive soft deletion (`is_active = FALSE`).
 6. **Resilient Outage Degradation:**
-   - If Redis becomes unreachable, the service gracefully falls back to MySQL execution without returning HTTP 500 errors, reporting `DEGRADED` status in `/health`.
+   - If Redis becomes unreachable, the service gracefully falls back to direct MySQL execution without returning HTTP 500 errors, reporting `DEGRADED` status in `/health`.
 7. **Interactive Dashboard UI:**
    - A dark-theme client interface with 300ms debounced search, recursive category navigation, brand filters, live cache status (`HIT`/`MISS`/`BYPASS`), and admin CRUD controls.
 

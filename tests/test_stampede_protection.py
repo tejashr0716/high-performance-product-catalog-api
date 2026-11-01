@@ -44,3 +44,32 @@ async def test_cache_stampede_protection_on_cold_key(client: AsyncClient):
     # Without stampede protection, call_count would be 10.
     # With stampede protection, only 1 (or at most 2 under tight race) queries MySQL.
     assert call_count <= 2, f"Expected stampede protection to restrict DB calls to <=2, but observed {call_count} calls."
+
+
+@pytest.mark.asyncio
+async def test_mutex_lock_ownership_prevents_unauthorized_release():
+    """
+    Verifies that releasing a mutex lock requires the exact token that acquired it.
+    If a worker's lock expired and was re-acquired by another worker, the former worker
+    must not delete the new owner's lock.
+    """
+    from app.cache import get_redis_client, RELEASE_LOCK_LUA
+
+    redis = get_redis_client()
+    lock_key = "lock:test_ownership_key"
+    token_a = "token_owner_a"
+    token_b = "token_owner_b"
+
+    # Worker A acquires lock
+    acquired = await redis.set(lock_key, token_a, nx=True, ex=10)
+    assert acquired is True
+
+    # Worker B tries to release Worker A's lock using wrong token -> must return 0 and not delete lock
+    res = await redis.eval(RELEASE_LOCK_LUA, 1, lock_key, token_b)
+    assert res == 0
+    assert await redis.get(lock_key) == token_a
+
+    # Worker A releases using correct token -> must return 1 and delete lock
+    res_correct = await redis.eval(RELEASE_LOCK_LUA, 1, lock_key, token_a)
+    assert res_correct == 1
+    assert await redis.get(lock_key) is None

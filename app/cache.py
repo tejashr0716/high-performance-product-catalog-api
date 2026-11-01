@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 import redis.asyncio as aioredis
 from app.config import settings
@@ -13,6 +14,15 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 _redis: Optional[aioredis.Redis] = None
+
+# Atomic Lua script for safe mutex release: releases lock ONLY if owner token matches
+RELEASE_LOCK_LUA = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+else
+    return 0
+end
+"""
 
 
 def get_redis_client() -> aioredis.Redis:
@@ -69,8 +79,8 @@ def make_product_cache_key(product_id: int) -> str:
 def make_list_cache_key(filter_params: Dict[str, Any]) -> str:
     """
     Documented Key: catalog:list:{sha256}
-    Canonical parameter serialization guaranteeing zero collisions between
-    different filter values, pages, bounds, or sorting orders.
+    Canonical parameter serialization providing high-entropy SHA-256 collision resistance
+    between different filter values, pages, bounds, or sorting orders.
     """
     # Normalize dictionary by removing None and sorting keys
     clean_params = {
@@ -78,7 +88,7 @@ def make_list_cache_key(filter_params: Dict[str, Any]) -> str:
     }
     # Stable JSON serialization with sorted keys
     canonical_str = json.dumps(clean_params, default=str, sort_keys=True, separators=(",", ":"))
-    param_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()[:16]
+    param_hash = hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
     return f"catalog:list:{param_hash}"
 
 
@@ -157,7 +167,8 @@ async def safe_cache_delete_pattern(pattern: str) -> int:
 async def invalidate_product_cache(product_id: Optional[int] = None) -> Dict[str, Any]:
     """
     Invalidates individual product cache and all paginated/search catalog listings.
-    Guarantees that updated or deleted products do not remain stale.
+    Purges keys using non-blocking SCAN. Note: During highly concurrent interleaved
+    reads and writes, eventual consistency is bounded by cache TTL (default: 300s).
     """
     tasks = [safe_cache_delete_pattern("catalog:list:*")]
     if product_id is not None:
@@ -197,11 +208,12 @@ async def fetch_with_stampede_protection(
 
     client = get_redis_client()
     lock_key = f"lock:{cache_key}"
+    lock_token = uuid.uuid4().hex
     acquired_lock = False
 
     try:
-        # Try to acquire mutex lock for 5 seconds
-        acquired_lock = await client.set(lock_key, "1", nx=True, ex=settings.CACHE_MUTEX_TTL)
+        # Try to acquire mutex lock with a unique ownership token for CACHE_MUTEX_TTL
+        acquired_lock = await client.set(lock_key, lock_token, nx=True, ex=settings.CACHE_MUTEX_TTL)
     except Exception as exc:
         logger.warning(f"Redis mutex acquire failed ({exc}). Bypassing cache directly to MySQL.")
         # If Redis is completely down, bypass cache directly
@@ -216,11 +228,12 @@ async def fetch_with_stampede_protection(
                 await safe_cache_set(cache_key, data, ttl_seconds)
             return data, "MISS"
         finally:
-            # Release mutex lock safely
+            # Release mutex lock atomically using Lua script to verify lock ownership
+            # This prevents deleting another worker's lock if our execution outlived CACHE_MUTEX_TTL
             try:
-                await client.delete(lock_key)
-            except Exception:
-                pass
+                await client.eval(RELEASE_LOCK_LUA, 1, lock_key, lock_token)
+            except Exception as exc:
+                logger.warning(f"Failed to release Redis mutex lock safely: {exc}")
     else:
         # Another worker is currently populating this cold key.
         # Wait and poll up to 500ms (10 attempts * 50ms)
