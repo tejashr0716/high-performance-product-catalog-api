@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 _redis: Optional[aioredis.Redis] = None
+_redis_loop: Optional[asyncio.AbstractEventLoop] = None
 
 # Atomic Lua script for safe mutex release: releases lock ONLY if owner token matches
 RELEASE_LOCK_LUA = """
@@ -24,9 +25,26 @@ else
 end
 """
 
+# Atomic Lua script for version-gated cache set: sets value ONLY if item version >= min_version
+SET_VERSIONED_CACHE_LUA = """
+local key = KEYS[1]
+local min_ver_key = KEYS[2]
+local payload = ARGV[1]
+local ttl = tonumber(ARGV[2])
+local item_ver = tonumber(ARGV[3])
+
+local min_ver = tonumber(redis.call('get', min_ver_key) or "0")
+if item_ver >= min_ver then
+    redis.call('set', key, payload, 'EX', ttl)
+    return 1
+else
+    return 0
+end
+"""
+
 
 def get_redis_client() -> aioredis.Redis:
-    global _redis
+    global _redis, _redis_loop
     current_loop = None
     try:
         current_loop = asyncio.get_running_loop()
@@ -34,13 +52,9 @@ def get_redis_client() -> aioredis.Redis:
         pass
 
     if _redis is not None:
-        try:
-            pool = _redis.connection_pool
-            if hasattr(pool, "_loop") and pool._loop is not None:
-                if pool._loop.is_closed() or (current_loop and pool._loop is not current_loop):
-                    _redis = None
-        except Exception:
+        if _redis_loop is not None and (_redis_loop.is_closed() or (current_loop and _redis_loop is not current_loop)):
             _redis = None
+            _redis_loop = None
 
     if _redis is None:
         _redis = aioredis.Redis(
@@ -52,11 +66,12 @@ def get_redis_client() -> aioredis.Redis:
             socket_connect_timeout=settings.REDIS_TIMEOUT_SECONDS,
             decode_responses=True,
         )
+        _redis_loop = current_loop
     return _redis
 
 
 async def close_redis() -> None:
-    global _redis
+    global _redis, _redis_loop
     if _redis is not None:
         try:
             await _redis.aclose()
@@ -64,6 +79,7 @@ async def close_redis() -> None:
             pass
         finally:
             _redis = None
+            _redis_loop = None
         logger.info("Redis connection closed cleanly.")
 
 
@@ -127,6 +143,36 @@ async def safe_cache_set(key: str, value: Any, ttl_seconds: int) -> bool:
         return False
 
 
+async def safe_cache_set_versioned(
+    key: str,
+    value: Any,
+    ttl_seconds: int,
+    version: int,
+    min_ver_key: str,
+) -> bool:
+    """
+    Stores value in Redis ONLY if the item's version >= the minimum accepted version.
+    This prevents delayed out-of-order reads from repopulating the cache with stale data
+    after a concurrent database write has incremented the version.
+    """
+    try:
+        client = get_redis_client()
+        serialized = json.dumps(value, default=str)
+        res = await client.eval(
+            SET_VERSIONED_CACHE_LUA,
+            2,
+            key,
+            min_ver_key,
+            serialized,
+            ttl_seconds,
+            version,
+        )
+        return bool(res == 1)
+    except Exception as exc:
+        logger.warning(f"Redis SET versioned failed for '{key}': {exc}. Falling back to unversioned set.")
+        return await safe_cache_set(key, value, ttl_seconds)
+
+
 async def safe_cache_delete(key: str) -> bool:
     """Deletes an exact key safely."""
     try:
@@ -164,21 +210,35 @@ async def safe_cache_delete_pattern(pattern: str) -> int:
 # Cache Invalidation on Mutations
 # ==============================================================================
 
-async def invalidate_product_cache(product_id: Optional[int] = None) -> Dict[str, Any]:
+async def invalidate_product_cache(
+    product_id: Optional[int] = None,
+    new_version: Optional[int] = None,
+) -> Dict[str, Any]:
     """
     Invalidates individual product cache and all paginated/search catalog listings.
-    Purges keys using non-blocking SCAN. Note: During highly concurrent interleaved
-    reads and writes, eventual consistency is bounded by cache TTL (default: 300s).
+    Purges keys using non-blocking SCAN.
+    
+    To guard against stale repopulation (where an in-flight read arrives after a write
+    and repopulates the cache with old data):
+    If new_version is provided, sets a min_version guard in Redis matching CACHE_TTL_PRODUCT.
     """
+    client = get_redis_client()
     tasks = [safe_cache_delete_pattern("catalog:list:*")]
     if product_id is not None:
         tasks.append(safe_cache_delete(make_product_cache_key(product_id)))
+        if new_version is not None:
+            min_ver_key = f"catalog:product:{product_id}:min_version"
+            try:
+                tasks.append(client.set(min_ver_key, str(new_version), ex=settings.CACHE_TTL_PRODUCT))
+            except Exception as exc:
+                logger.warning(f"Failed to set min_version for product {product_id}: {exc}")
     
     results = await asyncio.gather(*tasks, return_exceptions=True)
     list_keys_cleared = results[0] if isinstance(results[0], int) else 0
     
     return {
         "product_id": product_id,
+        "new_version": new_version,
         "list_keys_cleared": list_keys_cleared,
         "product_key_cleared": bool(product_id is not None),
     }
@@ -192,6 +252,8 @@ async def fetch_with_stampede_protection(
     cache_key: str,
     ttl_seconds: int,
     db_fetcher: Callable[[], Any],
+    min_version_key: Optional[str] = None,
+    version_extractor: Optional[Callable[[Any], Optional[int]]] = None,
 ) -> Tuple[Any, str]:
     """
     Protects against cache stampedes on cold misses.
@@ -225,7 +287,15 @@ async def fetch_with_stampede_protection(
         try:
             data = await db_fetcher()
             if data is not None:
-                await safe_cache_set(cache_key, data, ttl_seconds)
+                # If version protection is enabled, perform version-gated cache set
+                if min_version_key and version_extractor:
+                    ver = version_extractor(data)
+                    if ver is not None:
+                        await safe_cache_set_versioned(cache_key, data, ttl_seconds, ver, min_version_key)
+                    else:
+                        await safe_cache_set(cache_key, data, ttl_seconds)
+                else:
+                    await safe_cache_set(cache_key, data, ttl_seconds)
             return data, "MISS"
         finally:
             # Release mutex lock atomically using Lua script to verify lock ownership

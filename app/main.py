@@ -200,10 +200,13 @@ async def get_product(product_id: int, response: Response, bypass_cache: bool = 
         cache_status = "BYPASS"
     else:
         cache_key = make_product_cache_key(product_id)
+        min_ver_key = f"catalog:product:{product_id}:min_version"
         product, cache_status = await fetch_with_stampede_protection(
             cache_key=cache_key,
             ttl_seconds=settings.CACHE_TTL_PRODUCT,
             db_fetcher=fetch_from_db,
+            min_version_key=min_ver_key,
+            version_extractor=lambda p: p.get("version") if isinstance(p, dict) else None,
         )
 
     if not product:
@@ -267,7 +270,9 @@ async def update_product(
         )
 
     # Invalidate both the individual product cache and all paginated lists
-    await invalidate_product_cache(product_id=product_id)
+    # Pass updated version to prevent stale out-of-order reads from repopulating cache
+    new_ver = updated.get("version") if isinstance(updated, dict) else None
+    await invalidate_product_cache(product_id=product_id, new_version=new_ver)
     return updated
 
 
