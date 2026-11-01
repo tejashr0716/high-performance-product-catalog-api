@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-25T12:00:37.969721+00:00",
+  "timestamp": "2026-11-01T16:36:57.901775+00:00",
   "hardware": {
     "platform": "darwin",
     "python_version": "3.14.6"
@@ -13,16 +13,16 @@
   "scenarios": {
     "uncached_mysql_primary": {
       "count": 200,
-      "min_ms": 9.182,
-      "mean_ms": 11.744,
-      "median_p50_ms": 11.511,
-      "p90_ms": 13.29,
-      "p95_ms": 14.281,
-      "p99_ms": 17.185,
-      "max_ms": 22.756,
-      "std_dev_ms": 1.5,
-      "rps": 787.98,
-      "total_duration_sec": 0.254,
+      "min_ms": 11.395,
+      "mean_ms": 39.237,
+      "median_p50_ms": 43.172,
+      "p90_ms": 46.345,
+      "p95_ms": 47.715,
+      "p99_ms": 50.934,
+      "max_ms": 58.732,
+      "std_dev_ms": 9.995,
+      "rps": 245.58,
+      "total_duration_sec": 0.814,
       "status_codes": {
         "200": 200
       },
@@ -32,16 +32,16 @@
     },
     "warm_redis_cache": {
       "count": 200,
-      "min_ms": 3.671,
-      "mean_ms": 6.319,
-      "median_p50_ms": 6.093,
-      "p90_ms": 6.669,
-      "p95_ms": 7.521,
-      "p99_ms": 12.562,
-      "max_ms": 13.042,
-      "std_dev_ms": 1.336,
-      "rps": 1431.17,
-      "total_duration_sec": 0.14,
+      "min_ms": 3.521,
+      "mean_ms": 6.917,
+      "median_p50_ms": 6.453,
+      "p90_ms": 8.083,
+      "p95_ms": 9.895,
+      "p99_ms": 15.366,
+      "max_ms": 17.605,
+      "std_dev_ms": 2.012,
+      "rps": 1270.62,
+      "total_duration_sec": 0.157,
       "status_codes": {
         "200": 200
       },
@@ -51,15 +51,15 @@
     },
     "cold_stampede_concurrency": {
       "count": 50,
-      "min_ms": 0.846,
-      "mean_ms": 11.24,
-      "median_p50_ms": 0.899,
-      "p90_ms": 57.536,
-      "p95_ms": 57.878,
-      "p99_ms": 57.976,
-      "max_ms": 58.209,
-      "std_dev_ms": 22.028,
-      "rps": 847.57,
+      "min_ms": 0.809,
+      "mean_ms": 11.479,
+      "median_p50_ms": 0.975,
+      "p90_ms": 57.778,
+      "p95_ms": 58.2,
+      "p99_ms": 58.589,
+      "max_ms": 58.803,
+      "std_dev_ms": 22.031,
+      "rps": 844.44,
       "total_duration_sec": 0.059,
       "status_codes": {
         "200": 50
@@ -72,9 +72,9 @@
     }
   },
   "comparative_analysis": {
-    "uncached_mysql_p50_ms": 11.511,
-    "warm_redis_p50_ms": 6.093,
-    "latency_reduction_percent": 47.07,
-    "throughput_gain_factor": 1.82
+    "uncached_mysql_p50_ms": 43.172,
+    "warm_redis_p50_ms": 6.453,
+    "latency_reduction_percent": 85.05,
+    "throughput_gain_factor": 5.17
   }
 }

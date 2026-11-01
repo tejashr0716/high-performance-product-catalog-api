@@ -1,6 +1,6 @@
 # Project 1 Validation & Benchmark Report
 **Service:** High-Performance Product Catalog API  
-**Evaluation Date:** 2026-10-25 12:00:37 UTC  
+**Evaluation Date:** 2026-11-01 16:36:57 UTC  
 **Environment:** macOS (Darwin), Python 3.14.6, MySQL 8.4, Redis 7.4  
 
 ---
@@ -8,9 +8,9 @@
 ## 1. Executive Summary
 This evaluation proves the efficacy of multi-tier caching, recursive ANSI SQL Common Table Expressions (CTE), and single-flight mutex cache stampede protection on an e-commerce catalog API.
 
-- **Warm Cache P50 Latency:** **6.093 ms** (down from **11.511 ms** uncached).
-- **Latency Reduction:** **47.07%** faster response times.
-- **Throughput Scalability:** **1.82x throughput increase** (787.98 RPS to 1431.17 RPS).
+- **Warm Cache P50 Latency:** **6.453 ms** (down from **43.172 ms** uncached).
+- **Latency Reduction:** **85.05%** faster response times.
+- **Throughput Scalability:** **5.17x throughput increase** (245.58 RPS to 1270.62 RPS).
 - **Test Suite Pass Rate:** **100% (20 passing automated tests)** covering CRUD, recursive hierarchical categories, cache stampedes, and outage fallbacks.
 
 ---
@@ -19,11 +19,11 @@ This evaluation proves the efficacy of multi-tier caching, recursive ANSI SQL Co
 
 | Metric | Uncached MySQL Baseline | Warm Redis Cache | Improvement |
 | :--- | :--- | :--- | :--- |
-| **P50 Median Latency** | `11.511 ms` | `6.093 ms` | **-47.07%** |
-| **P90 Latency** | `13.29 ms` | `6.669 ms` | **-49.8%** |
-| **P95 Latency** | `14.281 ms` | `7.521 ms` | **-47.3%** |
-| **P99 Latency** | `17.185 ms` | `12.562 ms` | **-26.9%** |
-| **Throughput (RPS)** | `787.98 req/sec` | `1431.17 req/sec` | **+1.82x** |
+| **P50 Median Latency** | `43.172 ms` | `6.453 ms` | **-85.05%** |
+| **P90 Latency** | `46.345 ms` | `8.083 ms` | **-82.6%** |
+| **P95 Latency** | `47.715 ms` | `9.895 ms` | **-79.3%** |
+| **P99 Latency** | `50.934 ms` | `15.366 ms` | **-69.8%** |
+| **Throughput (RPS)** | `245.58 req/sec` | `1270.62 req/sec` | **+5.17x** |
 | **Cache Hit Ratio** | `0.0% (Bypass)` | `100.0% (HIT)` | Zero cache misses |
 
 ---
